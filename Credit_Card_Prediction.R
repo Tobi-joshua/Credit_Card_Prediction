@@ -1,0 +1,153 @@
+---
+  title: "Credit_Card_Prediction"
+author: "Tobi Joshua"
+date: "`r Sys.Date()`"
+---
+  
+
+library(dplyr, warn.conflicts = FALSE)
+library(tidyverse)
+library(caret)
+library(rpart)
+library(e1071)
+library(ggplot2)
+library(gmodels)
+library(gtools)
+library(class)
+library(randomForest)
+library(rpart.plot)
+library(partykit)
+library(car)
+
+
+#(1) Load the credit data and get the summary statistics
+
+df1 <- read.csv("Credit.csv",header = TRUE,sep=",")
+print("The number of student that are cardholder are: "); sum(subset(df1$Student , df1$Student==1))
+
+
+#(2) partition the data into training and testing sets
+
+set.seed(42)  # set random seed for reproducibility
+
+sample<- sample(c(TRUE,FALSE),nrow(df1),replace = TRUE,prob = c(0.5,0.5))
+train_data <- df1[sample,]
+valid_data <- df1[!sample,]
+dim(train_data)
+dim(valid_data)
+
+
+
+
+# (3) Create a correlation matrix with the quantitative variables in in the training dataframe
+```{r}
+quant_vars <- c("Income", "Limit", "Rating", "Age", "Education", "Balance")  # select quantitative variable names
+train_data_quant <- train_data[, quant_vars]  # subset the training dataframe to only include the quantitative variables
+cor(train_data_quant)  # create correlation matrix
+
+
+# Limit and Rating pairs has the strongest values
+
+
+
+#(4) Conduct multiple regression using training dataframe
+model1 <- lm(train_data$Balance ~ Income + Limit + Rating + Age + Education + Student + Gender + Married , data = train_data)
+summary(model1)$coefficients
+# slope for rating variable is 1.686428e+00 
+
+
+# (5) Calculate the VIF of all predictor variables
+
+# Calculate VIF for all predictor variables in the model
+vif(model1)
+# VIF of limit variable is 156.423468
+
+A VIF value of 141.542257 for the Limit variable indicates that there is a very high level of multicollinearity between this variable and the other predictor variables in the model. This means that the variance of the estimated regression coefficients for the Limit variable is significantly increased due to its high correlation with the other predictor variables, and it may be difficult to separate the effects of the Limit variable from the effects of the other variables. This suggests that the high VIF for the Limit variable is a problem of multicollinearity in the model, which can make it difficult to interpret the results and may lead to incorrect inferences. To address this problem, one possible solution is to consider removing the Limit variable from the model or combining it with another variable to create a new predictor variable that captures the information from both variables.
+Multicollinearity lessen the statistical significants of an independent variables.
+
+
+
+#(6) Conduct a new multiple regression by removing Limit variable
+
+model2 <- lm(train_data$Balance ~ Income + Rating + Age + Education + Student + Gender + Married , data = train_data)
+summary(model2)
+
+# slope of the rating variable is 4.766
+
+
+# (7) create a residual and a normal probability  plot using the results of (6)
+
+# Get the residuals of the model
+residuals <- residuals(model2)
+# Create a residual plot of the model
+plot(predict(model2), residuals, xlab = "Fitted values", ylab = "Residuals", main = "Residual plot")
+
+# Create a normal probability plot of the residuals
+qqnorm(residuals)
+qqline(residuals)
+
+
+# (1) In the residual plot of the model2 linear regression model, there appears to be a U-shaped pattern, with the residuals being negative for low and high fitted values, and positive for medium fitted values. This pattern indicates that the model may not be capturing all of the important features of the data, and that there may be some nonlinearity in the relationship between the predictor variables and the outcome variable. Specifically, it suggests that the model may be underestimating the Balance values for low and high values of the predictors, and overestimating the Balance values for medium values of the predictors.
+
+# (2) In the normal probability plot of the residuals of the model2 linear regression model, the points do not fall exactly along the reference line, but they are close to it for the majority of the plot. This suggests that the residuals are approximately normally distributed, which is a desirable property of the residuals for a linear regression model. However, there are some deviations from normality towards the tails of the distribution, which suggests that the model may be overestimating the probability of extreme values of the residuals. This could be due to the presence of outliers or influential observations in the data, or to the fact that the model is not capturing all of the important features of the data.
+
+
+
+
+
+#(8) Which predictor variables have statistically significant relationship s with the outcome variables ( balance) ? 
+
+From the model2 output, the predictor variables that have a statistically significant relationship with the outcome variable Balance are Income, Rating, Age, Education, Student, and Married, as indicated by their corresponding t-values and p-values in the output.
+
+The p-values for all of these variables are less than 0.05, which is a commonly used threshold for statistical significance. This means that the probability of observing such a large or larger t-value by chance alone is less than 5%, assuming that the null hypothesis is true. Therefore, we can reject the null hypothesis and conclude that there is evidence of a non-zero relationship between each of these predictor variables and the Balance variable.
+
+
+
+#(9) Conduct a new multiple regression by removing Gender variable
+
+model3 <- lm(train_data$Balance ~ Income + Rating + Age + Student , data = train_data)
+summary(model3)
+
+#  standardized coeffic
+model3_standardized <- lm(scale(Balance) ~ scale(Income) + scale(Rating) + scale(Age) +scale(Student),data=train_data)
+summary(model3_standardized)
+
+(1) The R-squared adjusted for the model2 multiple linear regression model is 0.6512, as indicated by the value of the adj. R-squared in the output.
+
+(2) The R-squared adjusted value tells us the proportion of the variance in the Balance variable that is explained by the predictor variables included in the model, adjusted for the number of predictor variables and the sample size. In this case, the adjusted R-squared value of 0.6512 means that 65.12% of the variance in the Balance variable can be explained by the predictor variables included in the model.
+
+(3) The standardized slope coefficient for the Income variable is 0.4593, as indicated by the value of the Std. Coef. in the output.
+
+(4) Looking at the standardized slope coefficients, the variable that makes the strongest unique contribution to predicting credit card balance is the Rating variable, as it has the largest absolute value of standardized coefficient among all the predictor variables. This means that a one-unit increase in the Rating variable is associated with a larger increase in the Balance variable, compared to a one-unit increase in any other variable, after adjusting for the other variables in the model. However, it's important to note that this does not necessarily mean that the Rating variable is the most important variable for predicting credit card balance, as the choice of the best predictors depends on the specific research question and goals of the analysis.
+
+
+# (10) Conduct multiple regression using validation dataframe
+
+model4 <- lm(valid_data$Balance ~ Income + Rating + Age + Student , data = valid_data)
+summary(model4)$coefficients
+# Slope of rating variable is 4.812483e+00
+
+
+
+
+# Question 11 -Predict the balances for the new csv
+
+df2 <- read.csv("credit_card_prediction.csv",header = TRUE,sep=",")
+df2
+
+# Create a new data frame with predictor variables for new cardholders
+new_data <- data.frame(Income = c(132557, 24321, 67870),
+                       Rating = c(523, 433, 624),
+                       Age = c(43, 27, 61),
+                       Student = c(0, 1, 0))
+# Generate predicted credit card balances and 95% prediction intervals for new cardholders
+pred <- predict(model3, newdata = new_data, interval = "prediction", level = 0.95)
+pred
+
+
+The predicted credit card balance for the first new cardholder (who has a high income, high rating, and is not a student) is $ 387.5303, with a 95% prediction interval ranging from -$271.66  to 488.15
+
+
+95% prediction interval ranging from $1401.7598 1605.8547
+
+
